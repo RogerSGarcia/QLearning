@@ -1,5 +1,5 @@
 # QLearning
-Learning about Q-Learning via multiple sources. This repository contains coursework carried out for Spring2017: Special Topic in CSE - Algorithms for Artificial Intelligence CSE 6990 (Eric Hansen). To introduce Q-Learning.
+Learning about Q-Learning via multiple sources. This repository contains coursework carried out for Spring2017: Special Topic in CSE - Algorithms for Artificial Intelligence CSE 6990 (Dr. Eric Hansen). To introduce Q-Learning.
 
 ___________________________________________________
 
