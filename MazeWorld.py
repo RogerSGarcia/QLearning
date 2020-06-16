@@ -1,85 +1,81 @@
+from utils import *
 from tkinter import *
 import numpy as np
 import time
-# import pyscreenshot as ImageGrab
 from PIL import ImageGrab
 
-master = Tk()
+# Configure the type of Q-run
+camgian_maze = False
+random_walls = True
+generate_reds = False
 
+# Determine if we will use Camgian Demo Maze
+if camgian_maze:
+	maze_width = 19
+	maze_height = 19
+	random_walls = False
+	generate_reds = True
+else:
+	maze_width = 3
+	maze_height = 3
+
+# Initalize Grid World using tkinter
 iteration = 1
 triangle_size = 0.0
 cell_score_min = -9999
 cell_score_max = 9999
-Width = 30
-(x, y) = (6, 6)
+Width = 50
+
+master = Tk()
+(x, y) = (maze_width, maze_height)
 master.title(str(x) + 'x' + str(y) + "GridWorld")
+board = Canvas(master, width=x*Width, height=y*Width)
 position = [[0 for i in range(x)] for j in range(y)]
 colorscore = [[0 for i in range(x)] for j in range(y)]
 actions = ["up", "down", "left", "right"]
 
-# board = Canvas(master, width=x*Width, height=y*Width)
-board = Canvas(master, width=x*Width, height=y*Width)
-player = (0, y-1)
 score = 1
 restart = False
 walk_reward = -0.01
 status = None
-
 rewards = []
-
-# Generate a random set of walls
-
-# number_of_walls = int(x*x*0.10)
-number_of_walls = int(x*x*0.20) # 50by50
-walls = []
-
-for i in range(number_of_walls):
-
-	while True:
-		wall_x = np.random.randint(0, x)
-		wall_y = np.random.randint(0, y)
-		if (wall_x, wall_y) not in walls and (wall_x, wall_y) != player:
-			break
-
-	walls.append((wall_x, wall_y))
-
-print('WALLS')
-for w in walls:
-	print('w', w, 'player at', player)
-
-
-# Generate random set of red rectangles
-
-# number_of_red = int(x*x*0.15)
-number_of_red = int(x*x*0.05) #50by50
 specials = []
 
-for i in range(number_of_red):
+##################################################################################################################
+# Generate goal state (GREEN)
+##################################################################################################################
+goal_state = get_goal_state(random_walls, maze_width, maze_height)
+specials.append((goal_state[0], goal_state[1], "green", 1))
 
-	while True:
-		red_x = np.random.randint(0, x)
-		red_y = np.random.randint(0, y)
+##################################################################################################################
+# Generate a set of walls (BLACK)
+##################################################################################################################
+if random_walls:
+	player = (0,0)
+	walls = get_rand_walls(maze_width, maze_height, player, goal_state)
+else:
+	player = (1, 1)
+	if camgian_maze:
+		walls = get_camgian_maze()
+	else:
+		maze = get_maze_from_generator(maze_width, maze_height)
+		walls = get_walls_for_maze(maze)
 
-		if (red_x, red_y) not in walls and (red_x, red_y) != player and (red_x, red_y) not in specials:
-			break
-
-	specials.append((red_x, red_y, "red", -1))
-
-# Generate random green rectangle
-green_x = int(x/2)
-green_y = int(y/2)
-
-while True:
-	# green_x = np.random.randint(int(x/2),x)
-	# green_y = np.random.randint(0,y-(y*0.25))
-	if (green_x, green_y) not in walls and (green_x, green_y) not in player and (green_x, green_y) not in specials:
-		break
-	green_x -= int(2.0)
-	green_y -= int(2.0)
+##################################################################################################################
+# Generate random set of red rectangles (RED)
+##################################################################################################################
+if generate_reds:
+	red_squares = get_rand_reds(maze_width, maze_height, player, goal_state, walls)
+	for red_xy in red_squares:
+		specials.append((red_xy[0], red_xy[1], "red", -1))
 
 
-specials.append((green_x, green_y, "green", 1))
 
+##################################################################################################################
+##################################################################################################################
+# Under the hood stuff for World Environment 
+##################################################################################################################
+##################################################################################################################
 cell_scores = {}
 
 def create_triangle(i, j, action):
@@ -169,8 +165,7 @@ def try_move(dx, dy):
 def color_visited(new_x, new_y):
 	colorscore[new_x][new_y] += 1
 	colorind = colorscore[new_x][new_y]
-	# colorspeed = 0.001
-	colorspeed = 0.005
+	colorspeed = 0.045
 	colorvalue  = 255
 	colorvalue2 = 255
 	colorvalue = int(round(max(0, -(colorspeed*colorind**2)+255), 0))
@@ -204,7 +199,10 @@ def call_right(event):
 
 def restart_game():
     global player, score, me, restart, rewards
-    player = (0, y-1)
+    if random_walls:
+    	player = (0, 0)
+    else:
+    	player = (1, 1)
     score = 1
     restart = False
     rewards = list()
@@ -220,9 +218,7 @@ master.bind("<Left>", call_left)
 
 me = board.create_rectangle(player[0]*Width+Width*2/10, player[1]*Width+Width*2/10,
                             player[0]*Width+Width*8/10, player[1]*Width+Width*8/10, fill="orange", width=1, tag="me")
-
 board.grid(row=0, column=0)
-
 
 def start_game():
 	master.mainloop()
