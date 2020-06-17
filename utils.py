@@ -98,3 +98,4 @@ def get_camgian_maze():
 		for col in all_cols:
 			walls.append((col,row))
 	return(walls)
+

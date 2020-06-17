@@ -1,11 +1,12 @@
 import MazeWorld as World
 import threading
 import time
-import matplotlib.pyplot as plt
 import numpy as np
 import sys
 from PIL import ImageGrab
+from plot_utils import *
 
+# python Learner.py 0.3 0.1 0.03
 def print_usage():
     print('USAGE: python Learner.py gamma alpha_decay sleep(secs)')
 
@@ -14,24 +15,30 @@ if len(sys.argv) != 4:
     print_usage()
     sys.exit()
 
-discount = float(sys.argv[1]) #0.3
-alpha_decay = float(sys.argv[2]) #0.1
-sleepy = float(sys.argv[3]) #0.01
+# Initialize parameters
+discount = float(sys.argv[1]) # 0.3 # Discount factor
+alpha_decay = float(sys.argv[2]) # 0.1 # Learning rate decay
+
+# Speed of game
+# Number of seconds program should pause execution between iterations
+sleepy = float(sys.argv[3]) # 0.01 
 save = False
 
+# Define the actions  = ["up", "down", "left", "right"]
 actions = World.actions
 states = []
 Q = {}
-plot_x = []
-plot_y = []
+episodes = []
+scores = []
 avg_rewards = []
-avg_alphas = []
-last_alphas = list()
+alphas = []
 
+# Define the states
 for i in range(World.x):
     for j in range(World.y):
         states.append((i, j))
 
+# Initialize Q-table
 for state in states:
     temp = {}
     for action in actions:
@@ -39,15 +46,22 @@ for state in states:
         World.set_cell_score(state, action, temp[action])
     Q[state] = temp
 
+# Map actions to states in Q-table
 for (i, j, c, w) in World.specials:
     for action in actions:
         Q[(i, j)][action] = w
         World.set_cell_score((i, j), action, w)
 
-
 def do_action(action):
-    s = World.player
-    r = -World.score
+    """
+    Performs action and returns state, action taken, reward and new state
+    action : action to perform "up", "down", "left", "right"
+
+    Returns
+    state, action, reward, state2 : state, action, reward, new state
+    """
+    state = World.player
+    reward = -World.score
     if action == actions[0]:
         World.try_move(0, -1)
     elif action == actions[1]:
@@ -58,170 +72,95 @@ def do_action(action):
         World.try_move(1, 0)
     else:
         return
-    s2 = World.player
-    r += World.score
-    return s, action, r, s2
+    state2 = World.player
+    reward += World.score
+    return state, action, reward, state2
 
+def max_Q(state):
+    """
+    Returns the max Q-value for all actions in a given state
+    :param state (tuple): state to check Q-values
 
-def max_Q(s):
+    :return action, val (str, float): action with max Q-value
+    """
     val = None
-    act = None
-    for a, q in Q[s].items():
+    action = None
+    for a, q in Q[state].items():
         if val is None or (q > val):
             val = q
-            act = a
-    return act, val
+            action = a
+    return action, val
 
+def update_Q(state, action, alpha, reward, discount, max_q):
+    """
+    Update Q-table
+    :param state (tuple): state to be updated
+    :param action (str): action corresponding to state
+    :param alpha (float): alpha value 
+    :param inc (float): increment value 
 
-def inc_Q(s, a, alpha, inc):
-    Q[s][a] *= 1 - alpha
-    Q[s][a] += alpha * inc
-    World.set_cell_score(s, a, Q[s][a])
-
+    :return None: updates Q-value and World Environment
+    """
+    Q[state][action] = Q[state][action] * (1 - alpha)
+    Q[state][action] = Q[state][action] + (alpha * (reward + discount * max_q))
+    World.set_cell_score(state, action, Q[state][action])
 
 def run(alpha_decay,save,sleepy):
-    global discount, avg_alphas, last_alphas
+    global discount, avg_alphas
     time.sleep(0.001)
     alpha = 1
-    t = 1
-    flag = True
-    alphas = list()
+    number_of_iterations = 1.0
     success = 0
-    verbose = True
-    while flag:
+    verbose = False
+    while True:
+
+        # Pick the action
+        state = World.player
+        max_act, max_val = max_Q(state)
+        (state, action, reward, state2) = do_action(max_act)
+        
         if verbose:
-            print('**********\nWorld Iter: ', World.iteration, '\nMove: ', int(t), '\n', '**********')
+            print('**********\nWorld Iter: ', World.iteration, '\nMove: ', int(number_of_iterations - 1.0), '\n', '**********')
+            print(' ACTION:', action, '\n ALPHA: ', alpha, '\n SCORE: ', World.score, '\n Status: ', World.status)
 
-        print("*************************************")
-        for k,v in Q.items():
-            print(k,v)
-        print("*************************************")
-
-        # Pick the right action
-        s = World.player
-        max_act, max_val = max_Q(s)
-        (s, a, r, s2) = do_action(max_act)
-        if verbose:
-            print(' ACTION:', a, '\n ALPHA: ', alpha, '\n SCORE: ', World.score, '\n Status: ', World.status)
-
-        # Update Q
-        max_act, max_val = max_Q(s2)
-        inc_Q(s, a, alpha, r + discount * max_val)
+        # Update Q-Value
+        max_act, max_val = max_Q(state2)
+        update_Q(state, action, alpha, reward, discount, max_val)
 
         # Check if the game has restarted
-        score = World.score
-        rewards = World.rewards
-        alphas.append(alpha)
-        last_alphas.append(alpha)
-
-        t += 1.0
-
         if World.has_restarted():
-            if verbose:
-                print('*********************')
-                print('Average Learning Rate: ', sum(alphas)/len(alphas))
-                print('Discount Factor (gamma): ', discount)
-                print('Walk Reward: ', World.walk_reward)
-                print('World Iter: ', World.iteration)
-                print('Number of Moves (actions): ', int(t-1.0))
-                print('*********************')
-            if score > 0:
-                success += 1
-                if save:
-                    #save screenshot of world
-                    im = ImageGrab.grab(bbox=(0,0,500,500))
-                    im.save('WORLDscreenshot.png')
-                    save = input()
-                    if save == 'y':
-                        save = True
-                    else:
-                        save = False
-                print('PAUSING Goal Count: ', success)
-                if success >= 20:
-                    input()
 
-            avg_rewards.append(sum(rewards)/len(rewards))
-            avg_alphas.append(sum(alphas)/len(alphas))
+            avg_rewards.append(sum(World.rewards)/len(World.rewards))
+            episodes.append(World.iteration)
+            alphas.append(alpha)
+            scores.append(World.score)
+
+            if verbose:
+                print_info(alpha, discount, World.walk_reward, World.iteration, int(number_of_iterations - 1.0))
+
+            if World.iteration == 20:
+                World.end_game()
 
             World.restart_game()
-
-            alphas = list()
-            last_alphas = list()
-
             time.sleep(0.001)
-            t = 1.0
 
-            plot_x.append(World.iteration)
-            plot_y.append(score)
+        # Update number of iteration
+        number_of_iterations += 1.0
 
-            # plt.plot(plot_x, plot_y, color="black")
-            # # plt.pause(0.0001)
-            # plt.draw()
-            # plt.plot(plot_x,plot_y)
-            # plt.show()
-
-
-        #Update World iteration
-        # t += 1.0
         # Update the learning rate
-        alpha = 1 / pow(t, alpha_decay)#-0.1
+        alpha = 1 / pow(number_of_iterations, alpha_decay)#-0.1
 
         # MODIFY THIS SLEEP IF THE GAME IS GOING TOO FAST.
         time.sleep(sleepy)
-
 
 t = threading.Thread(target=run, args=(alpha_decay,save,sleepy))
 t.daemon = True
 t.start()
 World.start_game()
 
-print('======================')
-print(plot_x, plot_y)
-print('======================')
-print('avg rewards', avg_rewards)
-print('======================')
-###### Plotting ######
-plt.plot(plot_x,plot_y, color='g')
-plt.title("Iteration vs Score")
-plt.xlabel("Iteration")
-plt.ylabel("Score")
-plt.grid(True)
-# plt.savefig('Result00.svg', format = 'svg', dpi = 1200)
-# plt.text(max(plot_x)*0.70, 0, 'Discount Factor: ' + str(discount) + '\n' + 'Walk Reward: '+ str(World.walk_reward))
-# plt.text(max(plot_x), 0, r'$\mu=100,\ \sigma=15$')
-# plt.savefig('myfig.png')
-#####################################################
-plt.clf()
-plt.plot(plot_x,avg_rewards,color='k')
-plt.title("Avg. Reward Over Time")
-plt.xlabel("Iteration")
-plt.ylabel("Avg. Reward")
-plt.grid(True)
-# plt.savefig('Result01.svg', format = 'svg', dpi=1200)
-# plt.savefig('Result01.eps', format='eps', dpi=1000)
-#####################################################
-plt.clf()
-plt.plot(plot_x,avg_alphas,color='m')
-plt.title("Avg. " + r'$\alpha$' + " Over Time")
-plt.xlabel("Iteration")
-plt.ylabel("Avg. " + r'$\alpha$')
-plt.grid(True)
-# plt.savefig('Result02.svg', format = 'svg', dpi=1200)
-#####################################################
-plt.clf()
-plt.plot(range(0,len(last_alphas)),last_alphas,color='y')
-plt.title("Decay "+ r'$\alpha$' + " over Time (optimal)")
-plt.xlabel("Actions to Goal")
-plt.ylabel(r'$\alpha$')
-plt.grid(True)
-# plt.savefig('Result03.svg', format = 'svg', dpi=1200)
+# plot results and save
+results_to_plots(episodes, scores, avg_rewards, discount, alphas, World.walk_reward)
 
 print('Q-LEARNING GRID WORLD PARAMETERS:')
 print('  Discount Factor : ', discount)
 print('  Walk Reward : ', World.walk_reward)
-
-# X = np.linspace(-np.pi, np.pi, 256, endpoint=True)
-# C,S = np.cos(X), np.sin(X)
-# plt.plot(X,C)
-# plt.plot(X,S)
-# plt.show()

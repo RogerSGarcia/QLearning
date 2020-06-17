@@ -6,7 +6,7 @@ from PIL import ImageGrab
 
 # Configure the type of Q-run
 camgian_maze = False
-random_walls = True
+random_walls = False
 generate_reds = False
 
 # Determine if we will use Camgian Demo Maze
@@ -16,8 +16,8 @@ if camgian_maze:
 	random_walls = False
 	generate_reds = True
 else:
-	maze_width = 3
-	maze_height = 3
+	maze_width = 7
+	maze_height = 7
 
 # Initalize Grid World using tkinter
 iteration = 1
@@ -140,10 +140,12 @@ def try_move(dx, dy):
 	new_y = player[1] + dy
 	score += walk_reward
 	rewards.append(walk_reward)
+	
 	if (new_x >= 0) and (new_x < x) and (new_y >= 0) and (new_y < y) and not ((new_x, new_y) in walls):
 		color_visited(new_x, new_y)
 		board.coords(me, new_x*Width+Width*2/10, new_y*Width+Width*2/10, new_x*Width+Width*8/10, new_y*Width+Width*8/10)
 		player = (new_x, new_y)
+	
 	for (i, j, c, w) in specials:
 		if new_x == i and new_y == j:
 			score -= walk_reward
@@ -222,3 +224,6 @@ board.grid(row=0, column=0)
 
 def start_game():
 	master.mainloop()
+
+def end_game():
+	master.destroy()
